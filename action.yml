@@ -1,6 +1,10 @@
 name: Select Xcode
 description: Composite action to select a specific Xcode version.
 
+branding:
+  icon: code
+  color: blue
+
 inputs:
   xcode-version:
     description: The version of Xcode to select
