@@ -1,0 +1,142 @@
+name: Test
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  # ─── Happy-path: version resolved via xcode-version input ────────────────────
+  test-via-input:
+    name: Test – xcode-version input
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Detect latest available Xcode version
+        id: detect
+        run: |
+          VERSION=$(ls /Applications/ | grep -E '^Xcode_[0-9]' | sed 's/Xcode_//;s/\.app//' | sort -V | tail -1)
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Run action with xcode-version input
+        uses: ./
+        with:
+          xcode-version: ${{ steps.detect.outputs.version }}
+
+      - name: Assert correct Xcode was selected
+        run: |
+          SELECTED=$(xcode-select -p)
+          EXPECTED="/Applications/Xcode_${{ steps.detect.outputs.version }}.app/Contents/Developer"
+          if [ "$SELECTED" != "$EXPECTED" ]; then
+            echo "Expected: $EXPECTED"
+            echo "Got:      $SELECTED"
+            exit 1
+          fi
+
+  # ─── Version resolved via .xcode-version file ────────────────────────────────
+  test-via-xcode-version-file:
+    name: Test – .xcode-version file
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Detect latest available Xcode version
+        id: detect
+        run: |
+          VERSION=$(ls /Applications/ | grep -E '^Xcode_[0-9]' | sed 's/Xcode_//;s/\.app//' | sort -V | tail -1)
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Write .xcode-version file
+        run: echo "${{ steps.detect.outputs.version }}" > .xcode-version
+
+      - name: Run action with no input (reads .xcode-version file)
+        uses: ./
+
+      - name: Assert correct Xcode was selected
+        run: |
+          SELECTED=$(xcode-select -p)
+          EXPECTED="/Applications/Xcode_${{ steps.detect.outputs.version }}.app/Contents/Developer"
+          if [ "$SELECTED" != "$EXPECTED" ]; then
+            echo "Expected: $EXPECTED"
+            echo "Got:      $SELECTED"
+            exit 1
+          fi
+
+  # ─── Version resolved via pre-set XCODE_VERSION environment variable ─────────
+  test-via-env-var:
+    name: Test – XCODE_VERSION env var
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Detect latest available Xcode version and export as env var
+        id: detect
+        run: |
+          VERSION=$(ls /Applications/ | grep -E '^Xcode_[0-9]' | sed 's/Xcode_//;s/\.app//' | sort -V | tail -1)
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "XCODE_VERSION=$VERSION" >> "$GITHUB_ENV"
+
+      - name: Run action with no input (reads XCODE_VERSION env var)
+        uses: ./
+
+      - name: Assert correct Xcode was selected
+        run: |
+          SELECTED=$(xcode-select -p)
+          EXPECTED="/Applications/Xcode_${{ steps.detect.outputs.version }}.app/Contents/Developer"
+          if [ "$SELECTED" != "$EXPECTED" ]; then
+            echo "Expected: $EXPECTED"
+            echo "Got:      $SELECTED"
+            exit 1
+          fi
+
+  # ─── Priority: xcode-version input wins over .xcode-version file ─────────────
+  test-input-overrides-file:
+    name: Test – input takes priority over .xcode-version file
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Detect latest available Xcode version
+        id: detect
+        run: |
+          VERSION=$(ls /Applications/ | grep -E '^Xcode_[0-9]' | sed 's/Xcode_//;s/\.app//' | sort -V | tail -1)
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Write invalid version to .xcode-version file
+        run: echo "0.0.0" > .xcode-version
+
+      - name: Run action with valid input (overrides invalid .xcode-version file)
+        uses: ./
+        with:
+          xcode-version: ${{ steps.detect.outputs.version }}
+
+      - name: Assert correct Xcode was selected (input version, not file version)
+        run: |
+          SELECTED=$(xcode-select -p)
+          EXPECTED="/Applications/Xcode_${{ steps.detect.outputs.version }}.app/Contents/Developer"
+          if [ "$SELECTED" != "$EXPECTED" ]; then
+            echo "Expected: $EXPECTED"
+            echo "Got:      $SELECTED"
+            exit 1
+          fi
+
+  # ─── Failure path: no version source → action must fail ──────────────────────
+  test-no-version-fails:
+    name: Test – action fails when no version is configured
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run action with no version source
+        id: action
+        uses: ./
+        continue-on-error: true
+
+      - name: Assert action failed
+        run: |
+          if [ "${{ steps.action.outcome }}" != "failure" ]; then
+            echo "Expected action to fail, but it succeeded"
+            exit 1
+          fi
