@@ -2,6 +2,11 @@
 
 A GitHub Actions composite action that selects a specific Xcode version on macOS runners via `xcode-select`.
 
+[![GitHub Marketplace](https://img.shields.io/badge/Marketplace-select--xcode-blue?logo=github)](https://github.com/marketplace/actions/select-xcode)
+
+This action is also published on the [GitHub Actions Marketplace](https://github.com/marketplace/actions/select-xcode).
+
+
 ## Version resolution order
 
 The action resolves the Xcode version using the following priority:
